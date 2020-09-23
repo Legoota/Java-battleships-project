@@ -13,12 +13,12 @@ public class ServerCommunicationHandler extends Thread {
     PrintWriter[] outs = new PrintWriter[2]; //2 clients d'ecoute max
     Grid[] games = new Grid[2];
 
-    public ServerCommunicationHandler(Socket j1, Socket j2) throws IOException {
+    public ServerCommunicationHandler(Socket j1, BufferedReader inJ1, PrintWriter outJ1, Socket j2) throws IOException {
         this.joueurs[0] = j1;
         this.joueurs[1] = j2;
-        this.ins[0] = new BufferedReader(new InputStreamReader(this.joueurs[0].getInputStream()));
+        this.ins[0] = inJ1;
         this.ins[1] = new BufferedReader(new InputStreamReader(this.joueurs[1].getInputStream()));
-        this.outs[0] = new PrintWriter(this.joueurs[0].getOutputStream(), true);
+        this.outs[0] = outJ1;
         this.outs[1] = new PrintWriter(this.joueurs[1].getOutputStream(), true);
         this.games[0] = new Grid(10);
         this.games[1] = new Grid(10);
