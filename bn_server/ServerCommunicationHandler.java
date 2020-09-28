@@ -8,12 +8,46 @@ import java.net.Socket;
 import java.util.Random;
 
 public class ServerCommunicationHandler extends Thread {
+    /*
     BufferedReader[] ins = new BufferedReader[2];
     Socket[] joueurs = new Socket[2];
     PrintWriter[] outs = new PrintWriter[2]; //2 clients d'ecoute max
+    Grid[] games = new Grid[2];*/
+    BufferedReader[] ins;
+    Socket[] joueurs;
+    PrintWriter[] outs;
     Grid[] games = new Grid[2];
 
+    /**
+     * Constructeur cas solo
+     * @param j1 Socket joueur 1
+     * @param inJ1 BufferedReader joueur 1
+     * @param outJ1 PrintWriter joueur 1
+     * @throws IOException Exception I/O
+     */
+    public ServerCommunicationHandler(Socket j1, BufferedReader inJ1, PrintWriter outJ1) throws IOException {
+        this.joueurs = new Socket[1];
+        this.ins = new BufferedReader[1];
+        this.outs = new PrintWriter[1];
+        this.joueurs[0] = j1;
+        this.ins[0] = inJ1;
+        this.outs[0] = outJ1;
+        this.games[0] = new Grid(10);
+        this.games[1] = new Grid(10);
+    }
+
+    /**
+     * Constructeur cas multijoueur
+     * @param j1 Socket joueur 1
+     * @param inJ1 BufferedReader joueur 1
+     * @param outJ1 PrintWriter joueur 1
+     * @param j2 Socket joueur 2
+     * @throws IOException Exception I/O
+     */
     public ServerCommunicationHandler(Socket j1, BufferedReader inJ1, PrintWriter outJ1, Socket j2) throws IOException {
+        this.joueurs = new Socket[2];
+        this.ins = new BufferedReader[2];
+        this.outs = new PrintWriter[2];
         this.joueurs[0] = j1;
         this.joueurs[1] = j2;
         this.ins[0] = inJ1;
@@ -158,7 +192,6 @@ public class ServerCommunicationHandler extends Thread {
 
     //TODO: add bot
     //TODO: add config (changer taille grille, nombre bateau)
-    //TODO: add gui
 
     /**
      * Méthode permettant la fermeture du thread

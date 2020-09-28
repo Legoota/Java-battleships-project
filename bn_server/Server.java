@@ -32,7 +32,10 @@ public class Server {
                 outJ1.println("Lancement du jeu " + nbJoueurs + (nbJoueurs == 1 ? " joueur..." : " joueurs, attente connexion 2e joueur..."));
                 if(nbJoueurs == 1) {
                     System.out.println("1J, lancement");
-                    return;
+                    ServerCommunicationHandler sc = new ServerCommunicationHandler(client1Socket,inJ1,outJ1);
+                    Thread t = new Thread(sc);
+                    System.out.println("Starting game thread");
+                    t.start(); // démarrage d'un thread pour gérer la partie entre J1 et le serveur
                 }
                 else {
                     System.out.println("2J, attente 2e joueur");
