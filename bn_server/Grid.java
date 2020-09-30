@@ -50,6 +50,12 @@ public class Grid {
         }
     }
 
+    public boolean alreadyShot(int x, int y) {
+        for(int i = 0; i < this.xHits.size(); i++)
+            if(this.xHits.get(i) == x && this.xHits.get(i) == y) return true;
+        return false;
+    }
+
     /**
      * Methode pour obtenir toutes les coordonnées x des bateaux
      * @return Chaine de caractères des coordonnées en x des bateaux, séparées par ,

@@ -5,7 +5,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
-import java.util.Random;
+import java.security.SecureRandom;
 
 public class ServerCommunicationHandler extends Thread {
     /*
@@ -17,6 +17,8 @@ public class ServerCommunicationHandler extends Thread {
     Socket[] joueurs;
     PrintWriter[] outs;
     Grid[] games = new Grid[2];
+    int nbjoueurs;
+    static String[] BOAT_DIRECTIONS = {"h","b","g","d"};
 
     /**
      * Constructeur cas solo
@@ -26,6 +28,7 @@ public class ServerCommunicationHandler extends Thread {
      * @throws IOException Exception I/O
      */
     public ServerCommunicationHandler(Socket j1, BufferedReader inJ1, PrintWriter outJ1) throws IOException {
+        this.nbjoueurs = 1;
         this.joueurs = new Socket[1];
         this.ins = new BufferedReader[1];
         this.outs = new PrintWriter[1];
@@ -45,6 +48,7 @@ public class ServerCommunicationHandler extends Thread {
      * @throws IOException Exception I/O
      */
     public ServerCommunicationHandler(Socket j1, BufferedReader inJ1, PrintWriter outJ1, Socket j2) throws IOException {
+        this.nbjoueurs = 2;
         this.joueurs = new Socket[2];
         this.ins = new BufferedReader[2];
         this.outs = new PrintWriter[2];
@@ -59,7 +63,7 @@ public class ServerCommunicationHandler extends Thread {
     }
 
     /**
-     * Methode qui envoie un message aux 2 joueurs de la partie
+     * Methode qui envoie un message aux joueurs de la partie
      * @param msg Le message a envoyer
      */
     private void sendMessageAll(String msg) {
@@ -84,7 +88,6 @@ public class ServerCommunicationHandler extends Thread {
             outs[client].println(this.games[client_hit].getxCoordsHitsString());
             outs[client].println(this.games[client_hit].getyCoordsHitsString());
         }
-
     }
 
     /**
@@ -94,7 +97,7 @@ public class ServerCommunicationHandler extends Thread {
         this.games[0] = new Grid(10); // reset des grilles au cas ou on recommence une partie
         this.games[1] = new Grid(10);
         for(int joueur = 0; joueur < this.joueurs.length; joueur++){ // chaque joueur a son tour positionne ses bateaux
-            if(joueur == 0) outs[1].println("En attente  du placement des bateaux du premier joueur...");
+            if(joueur == 0 && this.nbjoueurs > 1) outs[1].println("En attente  du placement des bateaux du premier joueur...");
             outs[joueur].println("Positionnement des bateaux!");
             for(int i = 0; i < this.games[joueur].getFlotte().length; i++){ // parcours des bateaux a positionner
                 outs[joueur].println("Positionnez le bateau de longueur " + this.games[joueur].getFlotte()[i].getLength() + ",\n" +
@@ -121,6 +124,20 @@ public class ServerCommunicationHandler extends Thread {
             sendDisplayInfo(joueur,true);
             if(joueur == 0) outs[joueur].println("En attente du placement des bateaux du second joueur...");
         }
+        if(this.nbjoueurs == 1) { // placement des bateaux par le serveur cas 1 joueur
+            System.out.println("Server placing his boats...");
+
+            for(int i = 0; i < this.games[1].getFlotte().length; i++){ // parcours des bateaux a positionner
+                boolean valid;
+                do { // tant que le bateau n'est pas positionnable, on recommence
+                    SecureRandom rd = new SecureRandom();
+                    valid = this.games[1].boatBuilder(this.games[1].getFlotte()[i], rd.nextInt(10), rd.nextInt(10), BOAT_DIRECTIONS[rd.nextInt(4)]);
+                }
+                while (!valid);
+                this.games[1].updateGrille(); // mise a jour de la grille
+            }
+
+        }
         sendMessageAll("La partie va commencer!\n");
     }
 
@@ -129,33 +146,70 @@ public class ServerCommunicationHandler extends Thread {
      */
     public void game(){
         sendMessageAll("Pile ou face pour connaitre le premier joueur...");
-        Random rd = new Random();
+        SecureRandom rd = new SecureRandom();
         boolean pf = rd.nextBoolean(); // choix du premier joueur, puis gestion du joueur pour chaque tour
-        sendMessageAll(pf ? "Pile: le joueur 1 commence" : "Face: le joueur 2 commence");
+        sendMessageAll(pf ? "Pile: le joueur 1 commence" : this.nbjoueurs > 1 ? "Face: le joueur 2 commence" : "Face: le serveur commence");
         int coupsJ1 = 0; // nombre de coups joués pour J1
         int coupsJ2 = 0; // nombre de coups joués pour J2
         while(!this.games[0].isFinished() && !this.games[1].isFinished()){ // tant qu'aucune grille n'est terminée, on continue les tours
-            outs[pf ? 0 : 1].println("\nChoisissez les coordonnées de votre tir: x et y séparées d'un espace:");
-            outs[!pf ? 0 : 1].println("\nVotre adversaire prépare son tir...");
+            if(this.nbjoueurs > 1) {
+                outs[pf ? 0 : 1].println("\nChoisissez les coordonnées de votre tir: x et y séparées d'un espace:");
+                outs[!pf ? 0 : 1].println("\nVotre adversaire prépare son tir...");
+            }
+            else {
+                outs[0].println(pf ? "Choisissez les coordonnées de votre tir: x et y séparées d'un espace:" : "Le serveur prépare son tir...");
+            }
             try {
-                String[] coords; // coordonnées du tir
-                do coords = ins[pf ? 0 : 1].readLine().split(" ");
-                while(coords.length != 2 || coords[0] == null || coords[1] == null); // gestion d'une mauvaise entrée clavier
-                // on admet ici que l'utilisateur n'entre pas un autre charatère qu'un int
-                int tir = this.games[!pf ? 0 : 1].setTir(Integer.parseInt(coords[0]), Integer.parseInt(coords[1])); // !pf indique qu'on tire bien sur la grille adverse
-                String resultatTir = "";
-                if(tir == -1) resultatTir = "Plouf !";
-                else if(tir == 0) resultatTir = "Touché !";
-                else if(tir == 1) resultatTir = "Coulé !";
-                outs[pf ? 0 : 1].println("Feu ! vous avez tiré aux coordonnées x:" + coords[0] + " y:" + coords[1] +
-                        "\n" + resultatTir + "\nVoici votre grille de tirs:");
-                sendDisplayInfo(pf ? 0 : 1,false);
-                //outs[!pf ? 0 : 1].println("Votre adversaire a tiré aux coordonnées x:" + coords[0] + " y:" + coords[1] +
-                //        "\n" + resultatTir + "\nVoici votre grille actualisée: \n" + this.games[!pf ? 0 : 1].toString());
-                outs[!pf ? 0 : 1].println("Votre adversaire a tiré aux coordonnées x:" + coords[0] + " y:" + coords[1] +
-                                "\n" + resultatTir + "\nVoici votre grille actualisée:");
-                sendDisplayInfo(!pf ? 0 : 1, true); // affichage grille coté client
+                if(this.nbjoueurs > 1){ // Cas 2 joueurs
+                    String[] coords; // coordonnées du tir
+                    do coords = ins[pf ? 0 : 1].readLine().split(" ");
+                    while(coords.length != 2 || coords[0] == null || coords[1] == null); // gestion d'une mauvaise entrée clavier
+                    // on admet ici que l'utilisateur n'entre pas un autre charatère qu'un int
+                    int tir = this.games[!pf ? 0 : 1].setTir(Integer.parseInt(coords[0]), Integer.parseInt(coords[1])); // !pf indique qu'on tire bien sur la grille adverse
+                    String resultatTir = "";
+                    if(tir == -1) resultatTir = "Plouf !";
+                    else if(tir == 0) resultatTir = "Touché !";
+                    else if(tir == 1) resultatTir = "Coulé !";
+                    outs[pf ? 0 : 1].println("Feu ! vous avez tiré aux coordonnées x:" + coords[0] + " y:" + coords[1] +
+                            "\n" + resultatTir + "\nVoici votre grille de tirs:");
+                    sendDisplayInfo(pf ? 0 : 1,false);
+                    //outs[!pf ? 0 : 1].println("Votre adversaire a tiré aux coordonnées x:" + coords[0] + " y:" + coords[1] +
+                    //        "\n" + resultatTir + "\nVoici votre grille actualisée: \n" + this.games[!pf ? 0 : 1].toString());
+                    outs[!pf ? 0 : 1].println("Votre adversaire a tiré aux coordonnées x:" + coords[0] + " y:" + coords[1] +
+                            "\n" + resultatTir + "\nVoici votre grille actualisée:");
+                    sendDisplayInfo(!pf ? 0 : 1, true); // affichage grille coté client
+                }
+                else if(this.nbjoueurs == 1 && pf) { // Cas 1 joueur (a son tour de tirer) (on aurait surement pu regrouper cette partie dans le if precedent)
+                    String[] coords; // coordonnées du tir
+                    do coords = ins[0].readLine().split(" ");
+                    while(coords.length != 2 || coords[0] == null || coords[1] == null); // gestion d'une mauvaise entrée clavier
+                    // on admet ici que l'utilisateur n'entre pas un autre charatère qu'un int
+                    int tir = this.games[1].setTir(Integer.parseInt(coords[0]), Integer.parseInt(coords[1]));
+                    String resultatTir = "";
+                    if(tir == -1) resultatTir = "Plouf !";
+                    else if(tir == 0) resultatTir = "Touché !";
+                    else if(tir == 1) resultatTir = "Coulé !";
+                    outs[0].println("Feu ! vous avez tiré aux coordonnées x:" + coords[0] + " y:" + coords[1] +
+                            "\n" + resultatTir + "\nVoici votre grille de tirs:");
+                    sendDisplayInfo(0,false);
+                }
+                else { // Cas 1 joueur (au tour du serveur de tirer)
+                    int[] coords = new int[2];
+                    do {
+                        coords[0] = rd.nextInt(10);
+                        coords[1] = rd.nextInt(10);
+                    } while(this.games[0].alreadyShot(coords[0],coords[1]));
 
+                    int tir = this.games[0].setTir(coords[0], coords[1]);
+                    String resultatTir = "";
+                    if(tir == -1) resultatTir = "Plouf !";
+                    else if(tir == 0) resultatTir = "Touché !";
+                    else if(tir == 1) resultatTir = "Coulé !";
+
+                    outs[0].println("Votre adversaire a tiré aux coordonnées x:" + coords[0] + " y:" + coords[1] +
+                            "\n" + resultatTir + "\nVoici votre grille actualisée:");
+                    sendDisplayInfo(0, true); // affichage grille coté client
+                }
             } catch (IOException e) { e.printStackTrace(); }
 
             sendMessageAll("\nJoueur suivant !\n");
@@ -177,14 +231,14 @@ public class ServerCommunicationHandler extends Thread {
             setBoats();
             System.out.println("Playing the game");
             game();
-            String[] reponses = new String[2];
+            String[] reponses = new String[this.nbjoueurs];
             for(int all = 0; all < this.joueurs.length; all++){
                 this.outs[all].println("Recommencer une partie ? y / n");
                 try {
                     reponses[all] = ins[all].readLine();
                 } catch (IOException e) { e.printStackTrace(); }
             }
-            keepPlaying = reponses[0].toLowerCase().equals("y") && reponses[1].toLowerCase().equals("y"); // on arrete de jouer si au moins 1 des joueurs ne veut plus (autre réponse que "y")
+            keepPlaying = this.nbjoueurs > 1 ? reponses[0].toLowerCase().equals("y") && reponses[1].toLowerCase().equals("y") : reponses[0].toLowerCase().equals("y"); // on arrete de jouer si au moins 1 des joueurs ne veut plus (autre réponse que "y")
         }
         sendMessageAll("Merci d'avoir joué, fermeture des connexions... \n Appuyez sur entrée pour fermer");
         close();
