@@ -8,17 +8,14 @@ import java.net.Socket;
 import java.security.SecureRandom;
 
 public class ServerCommunicationHandler extends Thread {
-    /*
-    BufferedReader[] ins = new BufferedReader[2];
-    Socket[] joueurs = new Socket[2];
-    PrintWriter[] outs = new PrintWriter[2]; //2 clients d'ecoute max
-    Grid[] games = new Grid[2];*/
+
     BufferedReader[] ins;
     Socket[] joueurs;
     PrintWriter[] outs;
     Grid[] games = new Grid[2];
     int nbjoueurs;
     static String[] BOAT_DIRECTIONS = {"h","b","g","d"};
+    int tailleGrille = 10;
 
     /**
      * Constructeur cas solo
@@ -35,8 +32,6 @@ public class ServerCommunicationHandler extends Thread {
         this.joueurs[0] = j1;
         this.ins[0] = inJ1;
         this.outs[0] = outJ1;
-        this.games[0] = new Grid(10);
-        this.games[1] = new Grid(10);
     }
 
     /**
@@ -58,8 +53,6 @@ public class ServerCommunicationHandler extends Thread {
         this.ins[1] = new BufferedReader(new InputStreamReader(this.joueurs[1].getInputStream()));
         this.outs[0] = outJ1;
         this.outs[1] = new PrintWriter(this.joueurs[1].getOutputStream(), true);
-        this.games[0] = new Grid(10);
-        this.games[1] = new Grid(10);
     }
 
     /**
@@ -77,28 +70,58 @@ public class ServerCommunicationHandler extends Thread {
      */
     private void sendDisplayInfo(int client, boolean type) {
         outs[client].println("display"); // affichage grille (coté client)
+        outs[client].println(this.tailleGrille); // envoi de la taille de la grille au client
         if(type){
-            outs[client].println("o");
+            outs[client].println("o"); // affichage de sa grille
             outs[client].println(this.games[client].getxCoordsString());
             outs[client].println(this.games[client].getyCoordsString());
         }
         else{
             int client_hit = client == 0 ? 1 : 0;
-            outs[client].println("x");
+            outs[client].println("x"); // affichage de la grille de ses tirs
             outs[client].println(this.games[client_hit].getxCoordsHitsString());
             outs[client].println(this.games[client_hit].getyCoordsHitsString());
         }
     }
 
     /**
+     * Methode permettant la configuration du jeu (taille grille, on pourrait ajouter nombre de bateaux, ...)
+     * Le client 0 est le seul a pouvoir effectuer la configuration dans cette methode
+     */
+    public void configure() {
+        outs[0].println("Passer par la configuration du jeu ? y: oui / n: non");
+        try{
+            String reponse = ins[0].readLine();
+            if(reponse == null || (reponse != null && !reponse.toLowerCase().equals("y"))) return;
+        } catch(IOException e) { e.printStackTrace(); }
+        if(this.nbjoueurs > 1) outs[1].println("Le joueur 1 configure la partie...");
+        outs[0].println("--- Configuration ---");
+        outs[0].println("Voulez vous changer la taille de la grille ? y: oui / n: non");
+        try{
+            String reponse = ins[0].readLine();
+            if(reponse != null && reponse.toLowerCase().equals("y")) {
+                outs[0].println("Entrez la taille de la grille (minimum 8):");
+                int taille = 0;
+                do {
+                    taille = Integer.parseInt(ins[0].readLine()); // il faudrait une vérification que l'on entre bien un int
+                    if(taille < 8) outs[0].println("Taille trop petite, veuillez entrer une autre taille:");
+                } while (taille < 8);
+                this.tailleGrille = taille;
+                sendMessageAll("La taille de la grille est maintenant de " + this.tailleGrille + " x " + this.tailleGrille);
+            }
+            sendMessageAll("Configuration terminée, lancement du jeu...");
+        } catch(IOException e) { e.printStackTrace(); }
+    }
+
+    /**
      * Methode permettant de créer une nouvelle partie et de positionner les navires des joueurs
      */
     public void setBoats() {
-        this.games[0] = new Grid(10); // reset des grilles au cas ou on recommence une partie
-        this.games[1] = new Grid(10);
+        this.games[0] = new Grid(this.tailleGrille); // initialisation grilles vierges
+        this.games[1] = new Grid(this.tailleGrille);
         for(int joueur = 0; joueur < this.joueurs.length; joueur++){ // chaque joueur a son tour positionne ses bateaux
-            if(joueur == 0 && this.nbjoueurs > 1) outs[1].println("En attente  du placement des bateaux du premier joueur...");
-            outs[joueur].println("Positionnement des bateaux!");
+            if(joueur == 0 && this.nbjoueurs > 1) outs[1].println("En attente du placement des bateaux du premier joueur...");
+            outs[joueur].println("--- Positionnement des bateaux ! ---");
             for(int i = 0; i < this.games[joueur].getFlotte().length; i++){ // parcours des bateaux a positionner
                 outs[joueur].println("Positionnez le bateau de longueur " + this.games[joueur].getFlotte()[i].getLength() + ",\n" +
                         "avec les coordonnées x et y de départ (valeur entre 0 et 9 comprise), ainsi que la direction (h: haut, b: bas, g: gauche, d: droite):");
@@ -131,7 +154,7 @@ public class ServerCommunicationHandler extends Thread {
                 boolean valid;
                 do { // tant que le bateau n'est pas positionnable, on recommence
                     SecureRandom rd = new SecureRandom();
-                    valid = this.games[1].boatBuilder(this.games[1].getFlotte()[i], rd.nextInt(10), rd.nextInt(10), BOAT_DIRECTIONS[rd.nextInt(4)]);
+                    valid = this.games[1].boatBuilder(this.games[1].getFlotte()[i], rd.nextInt(this.tailleGrille), rd.nextInt(this.tailleGrille), BOAT_DIRECTIONS[rd.nextInt(4)]);
                 }
                 while (!valid);
                 this.games[1].updateGrille(); // mise a jour de la grille
@@ -145,6 +168,7 @@ public class ServerCommunicationHandler extends Thread {
      * Méthode qui gere une partie de bataille navale: chacun son tour tire a l'aide de coordonnées x et y
      */
     public void game(){
+        sendMessageAll("--- Démarrage de la partie ! ---");
         sendMessageAll("Pile ou face pour connaitre le premier joueur...");
         SecureRandom rd = new SecureRandom();
         boolean pf = rd.nextBoolean(); // choix du premier joueur, puis gestion du joueur pour chaque tour
@@ -196,8 +220,8 @@ public class ServerCommunicationHandler extends Thread {
                 else { // Cas 1 joueur (au tour du serveur de tirer)
                     int[] coords = new int[2];
                     do {
-                        coords[0] = rd.nextInt(10);
-                        coords[1] = rd.nextInt(10);
+                        coords[0] = rd.nextInt(this.tailleGrille);
+                        coords[1] = rd.nextInt(this.tailleGrille);
                     } while(this.games[0].alreadyShot(coords[0],coords[1]));
 
                     int tir = this.games[0].setTir(coords[0], coords[1]);
@@ -227,10 +251,13 @@ public class ServerCommunicationHandler extends Thread {
         System.out.println("Thread run()");
         boolean keepPlaying = true;
         while(keepPlaying){
+            System.out.println("Configure the grid");
+            configure();
             System.out.println("Setting the boats");
             setBoats();
             System.out.println("Playing the game");
             game();
+            System.out.println("Game finished");
             String[] reponses = new String[this.nbjoueurs];
             for(int all = 0; all < this.joueurs.length; all++){
                 this.outs[all].println("Recommencer une partie ? y / n");
@@ -240,12 +267,10 @@ public class ServerCommunicationHandler extends Thread {
             }
             keepPlaying = this.nbjoueurs > 1 ? reponses[0].toLowerCase().equals("y") && reponses[1].toLowerCase().equals("y") : reponses[0].toLowerCase().equals("y"); // on arrete de jouer si au moins 1 des joueurs ne veut plus (autre réponse que "y")
         }
+        System.out.println("Ending thread");
         sendMessageAll("Merci d'avoir joué, fermeture des connexions... \n Appuyez sur entrée pour fermer");
         close();
     }
-
-    //TODO: add bot
-    //TODO: add config (changer taille grille, nombre bateau)
 
     /**
      * Méthode permettant la fermeture du thread
@@ -260,4 +285,9 @@ public class ServerCommunicationHandler extends Thread {
             }
         } catch (IOException e) { e.printStackTrace(); }
     }
+
+    // TODO: Ajouter SceneBuilder gui
+    // TODO: Compacter game() en regroupant 2j 1j
+    // TODO: Ajouter verif sur les readLine()
+    // TODO: Ajouter verif (regex) sur l'adresse IP de connexion
 }

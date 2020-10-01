@@ -24,12 +24,15 @@ public class ClientListener extends Thread {
             try{
                 String msg = in.readLine();
                 if(msg.equals("display")){
+                    int gridsize = Integer.parseInt(in.readLine());
                     String type = in.readLine();
                     String[] xcoordsString = in.readLine().split(",");
-                    int[] xcoords = Arrays.asList(xcoordsString).stream().mapToInt(Integer::parseInt).toArray();
                     String[] ycoordsString = in.readLine().split(",");
-                    int[] ycoords = Arrays.asList(ycoordsString).stream().mapToInt(Integer::parseInt).toArray();
-                    display(xcoords,ycoords, type,10);
+                    if(xcoordsString != null && !xcoordsString.equals("") && ycoordsString != null && !ycoordsString.equals("")){
+                        int[] xcoords = Arrays.asList(xcoordsString).stream().mapToInt(Integer::parseInt).toArray();
+                        int[] ycoords = Arrays.asList(ycoordsString).stream().mapToInt(Integer::parseInt).toArray();
+                        display(xcoords,ycoords, type,gridsize);
+                    }
                 }
                 else if(msg.equals("exit")){
                     in.close(); // fermeture du thread

@@ -50,9 +50,15 @@ public class Grid {
         }
     }
 
+    /**
+     * Methode permettant au serveur de savoir s'il a deja tiré auxx coordonnées x y
+     * @param x Coordonnée x du tir du serveur
+     * @param y Coordonnée y du tir du serveur
+     * @return True si le serveur a déjà tiré aux coordonnées x y, False sinon
+     */
     public boolean alreadyShot(int x, int y) {
         for(int i = 0; i < this.xHits.size(); i++)
-            if(this.xHits.get(i) == x && this.xHits.get(i) == y) return true;
+            if(this.xHits.get(i) == x && this.yHits.get(i) == y) return true;
         return false;
     }
 
@@ -106,7 +112,7 @@ public class Grid {
      * @return -1 si dans l'eau, 0 si touché, 1 si coulé
      */
     public int setTir(int x, int y){
-        if(x > 9 || y > 9 || x < 0 || y < 0) return -1;
+        if(x > this.gridSize-1 || y > this.gridSize-1 || x < 0 || y < 0) return -1;
         int res = -1; // -1 = dans l'eau
         this.xHits.add(x);
         this.yHits.add(y);
@@ -162,11 +168,11 @@ public class Grid {
      * @return True si le bateau est bien placé, False sinon
      */
     public boolean boatBuilder(Boat b, int x, int y, String direction) {
-        if(x < 0 || y < 0 || x > 9 || y > 9 || direction == null) return false; // position de depart hors grille
+        if(x < 0 || y < 0 || x > this.gridSize-1 || y > this.gridSize-1 || direction == null) return false; // position de depart hors grille
         if(!"hbgd".contains(direction)) return false; // direction non valide
         switch (direction) { // verification si le bateau ne sort pas de la grille
             case "d":
-                if(x + b.getLength() > 9) return false; // on verifie que le bateau entre en entier dans la grille
+                if(x + b.getLength() > this.gridSize-1) return false; // on verifie que le bateau entre en entier dans la grille
                 for(int i = 0; i < b.getLength(); i++) {
                     if(alreadyOccupied(x+i,y,b)) return false; // on verifie que chaque partie du bateau ne chevauche pas un autre bateau
                     b.setXcoord(i,x+i);
@@ -190,7 +196,7 @@ public class Grid {
                 }
                 break;
             case "b":
-                if(y + b.getLength() > 9) return false;
+                if(y + b.getLength() > this.gridSize-1) return false;
                 for(int i = 0; i < b.getLength(); i++) {
                     if(alreadyOccupied(x,y+i,b)) return false;
                     b.setXcoord(i,x);
@@ -201,6 +207,7 @@ public class Grid {
         return true;
     }
 
+    @Override
     public String toString(){
         String s = "";
         for(int i = 0; i < this.gridSize; i++){
